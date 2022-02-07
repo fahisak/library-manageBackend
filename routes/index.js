@@ -1,3 +1,4 @@
+const e = require('express');
 var express = require('express');
 var router = express.Router();
 
@@ -108,13 +109,13 @@ router.post('/add_books', verification, async function(req, res, next) {;
 
 
     if (result.length === 0) {
-        await db.get().collection('book_details').insertOne({ bookname: req.body.bookdetails.bookname, author: req.body.bookdetails.author, image: req.body.url, edition: req.body.bookdetails.edition, language: req.body.bookdetails.language, category: req.body.bookdetails.category, stock: req.body.bookdetails.stock, arrangement: 'pending' })
+        await db.get().collection('book_details').insertOne({ bookname: req.body.bookdetails.bookname, author: req.body.bookdetails.author, image: req.body.url, edition: req.body.bookdetails.edition, language: req.body.bookdetails.language, category: req.body.bookdetails.category, actualstock: req.body.bookdetails.stock, currentstock: req.body.bookdetails.stock, arrangement: 'pending' })
         res.json({ message: 'insert sucessfully' });
 
     } else {
         // console.log("stock", result.stock);
 
-        await db.get().collection('book_details').updateMany({ bookname: req.body.bookname, author: req.body.author, edition: req.body.edition, language: req.body.language }, { $set: { stock: parseInt(result.stock) + parseInt(req.body.stock) } })
+        await db.get().collection('book_details').updateMany({ bookname: req.body.bookname, author: req.body.author, edition: req.body.edition, language: req.body.language }, { $set: { actualstock: parseInt(result.actualstock) + parseInt(req.body.stock) } })
 
         res.json({ message: 'Already exists' });
     }
@@ -256,8 +257,6 @@ router.get('/searchbooks', async function(req, res, next) {
         }
     }, {
 
-
-
         $project: {
             _id: 0,
             bookid: 0,
@@ -283,7 +282,62 @@ router.get('/searchbooks', async function(req, res, next) {
 
 
 
-// router.get('/searchbooks', async function(req, res, next) {
+router.post('/searchbook', async function(req, res, next) {
+    console.log("book", req.body)
+    const data = await db.get().collection('book_details').find({ bookname: req.body.book }).toArray()
+    console.log("dataaaa", data)
+
+    res.json(data);
+
+
+});
+
+
+router.post('/bookdistribution', async function(req, res, next) {
+    console.log("req", req.body)
+    const { name, email, dob } = req.body.details
+
+    const data = await db.get().collection('membership_request').find({ name: name, email: email, dob: dob, status: "Accepted", type: 'user' }).toArray()
+    console.log("length", data.length);
+    if (data.length === 0) {
+
+        res.json({ message: "please take membership or details incorrect" })
+    } else {
+
+        const result = await db.get().collection('book_arrangment').aggregate([{ $match: { bookid: ObjectId(req.body.id) } }, {
+            $lookup: {
+                from: 'book_details',
+                localField: 'bookid',
+                foreignField: '_id',
+
+                as: 'bookdetails'
+            }
+        }, {
+
+            $project: {
+                _id: 0,
+                bookid: 0,
+                referanceid: 0,
+                arrangedbook: 0,
+                // shelfno: 1,
+                // bookdetails: 1
+            }
+
+        }]).toArray()
+
+
+        const book = await db.get().collection('book_details').find({ _id: ObjectId(req.body.id) }).toArray()
+        const shelf = await db.get().collection('book_arrangment').find({ bookid: ObjectId(req.body.id) }).toArray()
+        res.json({ book: book, shelf: shelf, result: result, message: "take book after inform librarian" })
+    }
+
+    // res.json(data);
+
+
+});
+
+
+// router.get('/bookdistribution"', async function(req, res, next) {
 //     const data = await db.get().collection('book_details').find().toArray()
 //     console.log("dataaaa", data)
 
@@ -292,6 +346,22 @@ router.get('/searchbooks', async function(req, res, next) {
 
 // });
 
+// router.get('/bookdistribution"', async function(req, res, next) {
+//     const data = await db.get().collection('book_details').find().toArray()
+//     console.log("dataaaa", data)
+
+//     res.json(data);
+
+
+// });
+// router.get('/bookdistribution"', async function(req, res, next) {
+//     const data = await db.get().collection('book_details').find().toArray()
+//     console.log("dataaaa", data)
+
+//     res.json(data);
+
+
+// });
 
 
 
