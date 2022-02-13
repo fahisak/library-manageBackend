@@ -3,6 +3,7 @@ var express = require('express');
 var router = express.Router();
 
 const session = require('express-session');
+const bcrypt = require('bcrypt');
 
 
 
@@ -79,9 +80,6 @@ router.post('/take_membership', async function(req, res, next) {
         res.json({ message: 'Already request to membership' });
     }
 
-
-
-
 });
 
 
@@ -102,20 +100,21 @@ router.post('/create_account', function(req, res, next) {
 router.post('/add_books', verification, async function(req, res, next) {;
     console.log("nnn");
     console.log("fffff", req.body)
+    const { bookname, author, edition, language, category, stock } = req.body.bookdetails
 
-    const result = await db.get().collection('book_details').find({ bookname: req.body.bookdetails.bookname, author: req.body.bookdetails.author, edition: req.body.bookdetails.edition, language: req.body.bookdetails.language }).toArray()
+    const result = await db.get().collection('book_details').find({ bookname: bookname, author: author, edition: edition, language: language }).toArray()
     console.log("result", result);
     // console.log("bookname", req.body.bookname);
 
 
     if (result.length === 0) {
-        await db.get().collection('book_details').insertOne({ bookname: req.body.bookdetails.bookname, author: req.body.bookdetails.author, image: req.body.url, edition: req.body.bookdetails.edition, language: req.body.bookdetails.language, category: req.body.bookdetails.category, actualstock: req.body.bookdetails.stock, currentstock: req.body.bookdetails.stock, arrangement: 'pending' })
+        await db.get().collection('book_details').insertOne({ bookname: bookname, author: author, image: req.body.url, edition: edition, language: language, category: category, actualstock: stock, currentstock: stock, arrangement: 'pending' })
         res.json({ message: 'insert sucessfully' });
 
     } else {
         // console.log("stock", result.stock);
 
-        await db.get().collection('book_details').updateMany({ bookname: req.body.bookname, author: req.body.author, edition: req.body.edition, language: req.body.language }, { $set: { actualstock: parseInt(result.actualstock) + parseInt(req.body.stock) } })
+        await db.get().collection('book_details').updateMany({ bookname: bookname, author: author, edition: edition, language: language }, { $set: { actualstock: parseInt(result.actualstock) + parseInt(stock) } })
 
         res.json({ message: 'Already exists' });
     }
@@ -126,7 +125,7 @@ router.post('/add_books', verification, async function(req, res, next) {;
 
 router.get('/viewbookdetails', async function(req, res, next) {
     const data = await db.get().collection('book_details').find().toArray()
-    console.log("dataaaa", data)
+        // console.log("dataaaa", data)
 
     res.json(data);
 
@@ -271,9 +270,6 @@ router.get('/searchbooks', async function(req, res, next) {
 
 
     console.log("dataaaa", result)
-        // console.log("datbookdetails", result[0])
-        // console.log("dddddd", result[0].shelfno);
-        // console.log("ccc", result[0].bookdetails[0].bookname);
 
     res.json(result);
 
@@ -286,8 +282,32 @@ router.post('/searchbook', async function(req, res, next) {
     console.log("book", req.body)
     const data = await db.get().collection('book_details').find({ bookname: req.body.book }).toArray()
     console.log("dataaaa", data)
+    console.log("iddd", data[0]._id)
 
-    res.json(data);
+
+    const result = await db.get().collection('book_arrangment').aggregate([{ $match: { bookid: data[0]._id } }, {
+        $lookup: {
+            from: 'book_details',
+            localField: 'bookid',
+            foreignField: '_id',
+
+            as: 'bookdetails'
+        }
+    }, {
+
+        $project: {
+            _id: 0,
+            bookid: 0,
+            referanceid: 0,
+            arrangedbook: 0,
+            // shelfno: 1,
+            // bookdetails: 1
+        }
+
+    }]).toArray()
+
+
+    res.json(result);
 
 
 });
@@ -326,9 +346,7 @@ router.post('/bookdistribution', async function(req, res, next) {
         }]).toArray()
 
 
-        const book = await db.get().collection('book_details').find({ _id: ObjectId(req.body.id) }).toArray()
-        const shelf = await db.get().collection('book_arrangment').find({ bookid: ObjectId(req.body.id) }).toArray()
-        res.json({ book: book, shelf: shelf, result: result, message: "take book after inform librarian" })
+        res.json({ result: result, message: "Take Book After Inform Librarian" })
     }
 
     // res.json(data);
@@ -337,7 +355,87 @@ router.post('/bookdistribution', async function(req, res, next) {
 });
 
 
-// router.get('/bookdistribution"', async function(req, res, next) {
+router.post('/update_books', async function(req, res, next) {
+    console.log("updattt", req.body);
+    const { bookname, image, author, edition, language, category, stock } = req.body.bookdetails
+    const result = await db.get().collection('book_details').find({ bookname: bookname, author: author, edition: edition, language: language }).toArray()
+    console.log("result", result);
+    // console.log("bookname", req.body.bookname);
+
+
+    if (result.length === 0) {
+        if (req.body.url === '') {
+            await db.get().collection('book_details').updateOne({ _id: ObjectId(req.body.id) }, {
+                $set: {
+                    bookname: bookname,
+                    author: author,
+                    image: image,
+                    edition: edition,
+                    language: language,
+                    category: category,
+                    actualstock: stock,
+                    currentstock: stock,
+                    arrangement: 'pending'
+                }
+            })
+
+        } else {
+            await db.get().collection('book_details').updateOne({ _id: ObjectId(req.body.id) }, { $set: { bookname: bookname, author: author, image: req.body.url, edition: edition, language: language, category: category, actualstock: stock, currentstock: stock, arrangement: 'pending' } })
+
+        }
+
+        res.json({ message: 'Update sucessfully' });
+
+    } else {
+
+        res.json({ message: 'Already exists' });
+    }
+
+
+});
+
+router.post('/deletebook', async function(req, res, next) {
+    console.log("delet", req.body.id);
+    await db.get().collection('book_details').deleteOne({ _id: ObjectId(req.body.id) })
+    await db.get().collection('book_arrangment').deleteOne({ bookid: ObjectId(req.body.id) })
+
+
+    res.json({ message: "Delete sucessfully" });
+
+
+});
+
+router.post('/postfeedback', async function(req, res, next) {
+    console.log("reqq", req.body);
+    let date_ob = new Date();
+    console.log("date", date_ob);
+    await db.get().collection('feedback').insertOne({ date: date_ob, feedback: req.body, type: "user" })
+
+
+    res.json({ message: "post feedback sucessfully" });
+
+
+});
+router.post('/subadminfeedback', async function(req, res, next) {
+    console.log("reqq", req.body);
+    let date_ob = new Date();
+    console.log("date", date_ob);
+    await db.get().collection('feedback').insertOne({ date: date_ob, feedback: req.body, type: "subadmin" })
+
+
+    res.json({ message: "post feedback sucessfully" });
+
+
+});
+router.get('/userfeedbacks', async function(req, res, next) {
+    const data = await db.get().collection('feedback').find().toArray()
+    console.log("dataaaa", data)
+
+    res.json(data);
+
+
+});
+// router.get('/postfeedback', async function(req, res, next) {
 //     const data = await db.get().collection('book_details').find().toArray()
 //     console.log("dataaaa", data)
 
@@ -345,30 +443,6 @@ router.post('/bookdistribution', async function(req, res, next) {
 
 
 // });
-
-// router.get('/bookdistribution"', async function(req, res, next) {
-//     const data = await db.get().collection('book_details').find().toArray()
-//     console.log("dataaaa", data)
-
-//     res.json(data);
-
-
-// });
-// router.get('/bookdistribution"', async function(req, res, next) {
-//     const data = await db.get().collection('book_details').find().toArray()
-//     console.log("dataaaa", data)
-
-//     res.json(data);
-
-
-// });
-
-
-
-
-
-
-
 
 
 

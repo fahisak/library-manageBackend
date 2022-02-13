@@ -7,6 +7,7 @@ var logger = require('morgan');
 ///////////////////////////////////
 const cors = require('cors')
 var session = require('express-session')
+const bcrypt = require('bcrypt');
 
 
 /////////////////////////////////////
